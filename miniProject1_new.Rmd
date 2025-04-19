@@ -1,0 +1,312 @@
+---
+title: "Data Has Never Tasted So Sweet!"
+author: "Maryam Choudhury"
+date: ' `r Sys.Date()`'
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+subtitle: "A Data-Driven Candy Value Assessment <br> STAT228"
+header-includes:
+- \usepackage{fvextra}
+- \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+---
+
+```{r include = FALSE}
+library(tidyverse)
+library(ggthemes)
+library(knitr)
+```
+
+```{r include = FALSE}
+candy_data <- read.csv("data/candy-data.csv")
+head(candy_data)
+View(candy_data)
+```
+
+## **Guiding Question**
+
+How do factors such as sugar content, cost, and ingredients influence a candy's popularity, and what insights can be drawn from these metrics when categorizing candies by budget tiers?
+
+## **Introduction**
+
+Cumulatively, we consume a lot of candy each year. 8 pounds, 20 pounds...estimates for the amount of candy Americans alone eat a year are thrown around like hotcakes. Whatever the actual number is, it's undoubtedly large, and it is only natural that compelling datasets exist. \n
+
+This report will use a dataset containing the results of a tournament-style poll hosted by FiveThirtyEight. The results included 8,371 unique IP addresses, so while it is not the result of a controlled scientific study, it has a wide enough breadth to assume it is a good enough sample of candy preferences for our casual purposes. In addition to tournament standing, each observance of unique candy includes ingredient presence, pleurisy, and price information. Please visit the GitHub repo linked in the source section below to learn more about individual variables and look at the original data set. \n
+
+This report is a trial of using R to create compelling graphics that will allow us to uncover insightful analysis. Specifically, it is setting out to better understand what factors, such as price and sugar content, influence a candy's popularity. Besides being fun, these insights can help someone decide on what candies to buy to appease a crowd. If we break these insights on candy popularity down even further, we can even help people decide in line with an ideal budget.
+
+## **Source**
+
+Data: candy-power-ranking by FiveThirtyEight. Link to Repo As of March 14th, 2024: \n <https://github.com/fivethirtyeight/data/tree/master/candy-power-ranking> \n
+
+## **Plot 1: Relationship Between Sugar Content and Popularity of Polled Candies, with Additional Considerations for Chocolate Content**
+
+### Plot Type: Scatterplot
+
+```{r include = FALSE}
+# Data Pre-processing
+# Convert wide format to long format
+candy_long <- candy_data |>
+  mutate(chocolate_marker = chocolate) |>
+  pivot_longer(cols = c(chocolate, fruity, caramel, peanutyalmondy, nougat, crispedricewafer), 
+               names_to = "ingredient_category", 
+               values_to = "contains") |>
+  filter(contains == 1)  # Keep only rows where the ingredient is present
+
+candy_long <- candy_long |>
+  mutate(chocolate = chocolate_marker) |>  # Restore the correct chocolate values
+  select(-chocolate_marker) 
+
+# Calculate correlation coefficients
+cor_no_choc <- candy_data |> 
+  filter(chocolate == 0) |> 
+  summarize(cor = cor(sugarpercent, winpercent)) |> 
+  pull(cor)
+
+cor_choc <- candy_data |> 
+  filter(chocolate == 1) |> 
+  summarize(cor = cor(sugarpercent, winpercent)) |> 
+  pull(cor)
+
+cor_choc_round <- round(cor_choc, 3)
+cor_no_choc_round <- round(cor_no_choc, 3)
+
+cor_list_str <- str_glue("Correlation Coefficients between Sugar Percentile and Popularity, for Candies w/ and w/out Chocolate \n Contains Chocolate: {cor_choc_round} \n Does Not Contain Chocolate: {cor_no_choc_round}")
+```
+
+```{r, fig.width = 10, fig.height = 5}
+# Create scatter-plot of popularity vs sugar content over all candy types (everything will either contain or not contain chocolate)
+
+ggplot(candy_data, aes(x = sugarpercent, y = winpercent, color = as.factor(chocolate)))+
+  geom_point(size = 3, alpha = 0.7) +  # Scatter points with transparency so that we can visualize overlap 
+  geom_smooth (method = "lm", aes(color = as.factor(chocolate), group = as.factor(chocolate)), se = FALSE, show.legend = FALSE) +
+  labs(title = "Rship btwn Sugar & Popularity Across Polled Candies", 
+       x = "Sugar Percentile", 
+       y = "Win Percent (Popularity)",
+       color = "Contains Chocolate") +
+  scale_color_manual(values = c("0" = "#0072B2", "1" = "#5C3317"), labels = c("False", "True")) +
+  theme_minimal() + # Label Chocolate YES/NO 
+  theme(legend.position = "bottom")
+```
+
+# 
+
+```{r echo = FALSE}
+writeLines(cor_list_str)
+```
+
+### **Explanation Of Plot Visuals**
+
+**Geometric objects explained:** This plot uses scatter points to represent individual candies, where each point corresponds to a candy’s sugar percentage (x-axis) and its popularity score (y-axis). \n
+
+**How variables are visually represented:** The color of each point represents whether or not the candy contains chocolate, distinguishing between chocolate-based and non-chocolate candies. \n
+
+**Justification for these choices:** The scatterplot format allows for clear visualization of any correlation between sugar content and popularity. Chocolate content is an important additional factor in consumer preference, making color a useful differentiator. \n
+
+**How axis scales, transformations, and levels enhance interpretability:** The x-axis (sugar content) is scaled from 0 to 100%, while the y-axis (win percentage/popularity) is also on a 0–100% scale. This normalization ensures that both axes are comparable across all candies.
+
+## **Plot 2: Relationship Between Sugar Content and Popularity of Polled Candies, by Ingredient Type, with Additional Considerations for Chocolate Content**
+
+### Plot Type: Scatterplot
+
+```{r, fig.width = 10, fig.height = 5}
+# Create scatter-plot of popularity vs sugar content, color-coded by chocolate presence
+# Shape differentiates other candy characteristics
+
+ggplot(candy_long, aes(x = sugarpercent, y = winpercent, color = as.factor(chocolate)))+
+  geom_point(size = 3, alpha = 0.7) +  # Scatter points with transparency so that we can visualize overlap +
+  geom_smooth (method = "lm", aes(color = as.factor(chocolate), group = as.factor(chocolate)), se = FALSE, show.legend = FALSE) +
+  labs(title = "Relationship between Sugar Content & Popularity by Ingredient Type", 
+       x = "Sugar Percentile", 
+       y = "Win Percent (Popularity)",
+       color = "Contains Chocolate") +
+  facet_wrap(~ ingredient_category) +
+  scale_color_manual(values = c("0" = "#0072B2", "1" = "#5C3317"), labels = c("False", "True")) +  # Label Chocolate YES/NO
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+```{r echo = FALSE}
+writeLines(cor_list_str)
+```
+
+### **Explanation Of Plot Visuals**
+
+**Geometric objects explained:** Scatter points again represent individual candies, while a linear regression line is included to indicate trends within different ingredient categories. \n
+
+**How variables are visually represented:** The x-axis shows the sugar percentile, while the y-axis displays popularity. Each subplot represents a different ingredient type (e.g., caramel, peanuty-almondy, crisped rice wafer), and chocolate presence is indicated by color. \n
+
+**Justification for these choices:** Breaking the scatterplot into ingredient-based subplots makes it easier to compare sugar-popularity relationships across different types of candies. \n
+
+**How axis scales, transformations, and levels enhance interpretability:** By keeping the same sugar and popularity scale across all facets of the grid, this plot allows viewers to directly compare ingredient-based trends. \n
+
+## **Plot 3: Candy Cost (x-labels, asc.) vs Popularity, with Additional Considerations for Chocolate Content**
+
+### Plot Type: Bar Chart
+
+```{r, fig.width = 5, fig.height = 10}
+ggplot(candy_data, aes(x = reorder(competitorname, pricepercent), y = winpercent, fill = as.factor(chocolate))) +
+  geom_bar(stat = "identity", color = "black") + # geom_bar automatically tallies and plots occurrences. Since we already have frequencies, we do not want to do that. 
+  coord_flip() +
+  labs(title = "Itemized Candy Cost vs Popularity", 
+       x = "Candy Name (Listed in Ascending Cost Percentile Order)", 
+       y = "Win Percent (Popularity)",
+       fill = "Contains Chocolate") +
+  #geom_text(aes(label = round(pricepercent, 3)), 
+            #hjust = -0.1, size = 1, color = "black") +
+  #scale_x_discrete(expand = expansion(mult = c(0.1, 0.2))) +  # Adds space between labels to reduce clutter
+  theme_minimal() +
+  theme(
+    # axis.text.x = element_text(angle =45, size = 2, hjust = 1),
+    # axis.text.y = element_text(size = 2),  # Smaller text to reduce clutter
+    # axis.title.y = element_text(size = 8, face = "bold"),  
+    # plot.title = element_text(size = 10, face = "bold"),
+    legend.position = "bottom"
+  ) 
+```
+
+### **Explanation Of Plot Visuals**
+
+**Geometric Objects Explained:** \n Bars (geom_bar): The chart uses a bar plot to represent the popularity (win percent) of each candy. Each candy is assigned a unique bar where its length corresponds to its popularity. \n
+
+**How Variables Are Visually Represented:** \n
+
+X-Axis: "Candy Name (Listed in Ascending Cost Percentile Order)" The x-axis represents different candies, sorted by increasing price percentile (cheapest to most expensive). The reorder() function ensures that candies are displayed in this sorted order. \n Y-Axis: "Win Percent (Popularity)" \n
+
+The y-axis represents the win percentage (popularity score) of each candy (higher bars indicate greater popularity). This allows for a comparison between candies in terms of surveyed-consumer preference. \n
+
+Fill Color (Chocolate vs. Non-Chocolate): \n The chart visually differentiates chocolate-containing and non-chocolate candies using color coded bars. This makes it easier to observe trends, such as whether chocolate candies tend to be more popular.
+
+**How Axis Scales, Transformations, and Levels Enhance Interpretability:** \n Sorting the X-Axis: By ordering candies by cost percentile, the chart provides an intuitive view of whether more expensive candies tend to be more or less popular. \n
+
+coord_flip()): This transformation rotates the bars horizontally. This made the plot more readable, especially given the long candy names. \n
+
+Legend Placement: The legend is placed at the bottom of the plot to avoid clutter.
+
+## **Plot 4: Value Assessment by Budget Tier**
+
+### Plot Type: Violin Plot
+
+```{r include = FALSE}
+candy_data_scaled <- candy_data |>
+  mutate(
+    bang_for_your_buck = ifelse(pluribus == 1, pricepercent, 0)
+  )
+
+# Scale variables to 0-100
+candy_data_scaled <- candy_data_scaled |>
+  mutate(
+    sugarpercent = sugarpercent * 100,  
+    bang_for_your_buck = bang_for_your_buck * 100,  
+    pricepercent = pricepercent * 100  
+  )
+
+# Value Assessment Across Budget Levels
+candy_data_scaled <- candy_data_scaled |>
+  mutate(budget_category = case_when(
+    pricepercent < 33 ~ "Low Budget",
+    pricepercent < 66 ~ "Mid Budget",
+    TRUE ~ "High Budget"
+  ),
+  # Convert budget_category to an ordered factor so that it appears low → mid → high.
+  budget_category = factor(budget_category, levels = c("Low Budget", "Mid Budget", "High Budget"))
+  )
+
+# Reshape data for ggplot
+candy_long_violin <- candy_data_scaled |>
+  pivot_longer(cols = c(winpercent, pricepercent, sugarpercent, bang_for_your_buck), 
+               names_to = "Value Metric", values_to = "Metric Score")  
+
+# Convert Value Metric to factor for ordering
+candy_long_violin$`Value Metric` <- factor(candy_long_violin$`Value Metric`, 
+                                           levels = c("sugarpercent", "bang_for_your_buck", "pricepercent", "winpercent"),
+                                           labels = c("Sugar Percentile in Tier", "Bang for Your Buck in Tier ", "Prices in Tier", "Popularity in Tier"))
+
+```
+
+```{r}
+ggplot(candy_long_violin, aes(x = "", y = `Metric Score`, fill = budget_category)) +
+  geom_violin(trim = FALSE, alpha = 0.7, na.rm = TRUE) +  
+  facet_grid(rows = vars(budget_category), cols = vars(`Value Metric`), scales = "free_y") +  # Creates a grid: rows = Budget Tier, cols = Value Metric
+  labs(title = "Value Assessment by Budget Tier",
+       x = "Budget Tier",  # Adding an x-axis label for clarity
+       y = "Metric Score", fill = "Budget Tier") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),  # Removing redundant x-axis tick labels
+    strip.text = element_text(size = 3, face = "bold"),  # Make facet labels clear
+    strip.background = element_rect(fill = "lightgray", color = "black"),
+    panel.spacing = unit(1, "lines")
+  )
+```
+
+### **Explanation Of Plot Visuals**
+
+**Geometric objects explained**: Violin plots are used to show the distribution of different metric scores (sugar content, price percentile, "bang for your buck," and popularity) within each budget tier. \n
+
+1.  Sugar Percentile in Tier \n
+
+    1.  What it Represents: Measures the sugar content of each candy as a percentile relative to all other candies in the dataset.\n
+
+    2.  How it is Calculated: The sugar content is given as a proportion (for instance, 0.75 means the candy contains 75% sugar). It has been scaled from a percentage to a proportion for better readability.
+
+2.  Bang for Your Buck in Tier \n
+
+    1.  What it Represents: Measures the price efficiency of a candy, specifically when multiple candies are included in a single package (pluribus == 1).
+
+    2.  \n How it is Calculated: If a candy is sold in bulk (for example, a bag of Skittles or M&Ms), this metric takes its price percentile and assigns it as a value. If not, it is set to 0. \n
+
+3.  Prices in Tier \n
+
+    1.  What it Represents: The relative cost of a candy within its budget tier. \n
+
+    2.  How it is Calculated: The dataset provides price as a percentile, so values, after being transformed into proportions, range from 0 to 100, with higher values representing more expensive candies. \n
+
+4.  Popularity in Tier \n
+
+    1.  What it Represents: A candy's popularity based on the FiveThirtyEight tournament-style voting.
+
+    2.  How it is Calculated: The "winpercent" column in the dataset measures how often a candy won its matchup against other candies, scaled from 0-100%.
+
+**How variables are visually represented:** Each row in the plot corresponds to a budget tier (low, mid, high), and each column represents one of the four key metrics. The width of each violin plot shows density distribution. \n
+
+**Justification for these choices:** Violin plots are a visualization tool that help us to understand how a metric is distributed within a category, revealing differences in price distribution, sugar content, and popularity between budget tiers.\n
+
+**How axis scales, transformations, and levels enhance interpretability:** The y-axis for each column is independently scaled to ensure readability, given that different metrics have different ranges.
+
+### **Comprehensive Analysis: Key Trends, Patterns, and Relationships**
+
+**On Sugar** \n
+
+\- In chocolate-containg candies there is a positive correlation between sugar content and popularity. The same trend is seen, tho mildly, in caramel and peanuty/almondy categories.
+
+\- Interestingly, the fruity category has only a very slight positive correlation between sugar and popularity.
+
+\- Notably, 'Nougat 'and 'Crisped Rice Wafer' show an inverse relationship, meaning that candies with higher sugar in these categories tend to be less popular.
+
+**Candy Cost vs. Popularity** \n
+
+\- Higher-cost candies (top end of y-axis in plot 3) do not always have higher popularity. As a matter of fact, cheaper candies (Smarties, Red Vines etc.) show mid to high popularity, indicating price alone does not drive success.
+
+\- Candies that contain chocolate tend to be on the higher popularity side, suggesting a preference for chocolate in general. \n
+
+Budget Categories and Value Metrics \n
+
+\- Sugar Content: Remains relatively stable across budget tiers.
+
+\- Bang-for-Your-Buck: Skews higher for lower-cost candies.
+
+\- Popularity: Higher-priced candies do not always have a competitive edge, meaning more expensive treats do not guarantee higher preference.
+
+### **Discussion: Significance and Implications**
+
+Chocolate candies tend to be more popular when they have higher sugar content, which supports the idea that chocolate-based candies are generally preferred when they are sweeter. Meanwhile, fruity candies have a weaker sugar-popularity relationship. This could suggest that other factors like tartness or chewiness have a larger role in their success. Similarly, ingredient types (nougat, crisped rice wafer) have observances where they are popular in less sugary forms. This could indicate that, in non-chocolate candies, factors besides sweetness (perhaps texture) play a role in consumer preferences. \n
+
+Practical Implication: If someone is selecting a candy for mass appeal, chocolate-based and moderately high sugar candies are a safe bet. \n
+
+Limitations: The popularity data in this dataset came from a sample of FiveThirtyEight readers. In this exploration, we assumed that data coming from this subset would not highly influence our results. To verify our assumptions, it would be valuable to use a more randomized study. \n
+
+Future Exploration: Investigate non-sugar factors, such as branding, endorsement, or nostalgia. Look into how seasonal trends, such as holiday editions, influence preferences.
